@@ -148,6 +148,9 @@ document.getElementById('runSearchBtn')?.addEventListener('click', async (event)
     try {
         const data = await postJson(appUrl('api/rodar_busca.php'), {});
         showToast(data.message || 'Rastreamento finalizado.');
+        if (Array.isArray(data.warnings) && data.warnings.length) {
+            setTimeout(() => showToast(`${data.warnings.length} alerta(s) de fonte. A busca continuou com as demais.`), 900);
+        }
         setTimeout(() => window.location.reload(), 900);
     } catch (error) {
         showToast(error.message);

@@ -5,110 +5,223 @@ const { pool } = require('./lib/db');
 const { lines } = require('./lib/text');
 const { normalizeText } = require('./lib/matcher');
 
-const DEFAULT_SOURCES = ['Mercado Livre', 'OLX', 'Zap Imoveis', 'Viva Real'];
+const SOURCE_SITES = {
+  'Mercado Livre': 'lista.mercadolivre.com.br/imoveis',
+  OLX: 'olx.com.br/imoveis',
+  'Zap Imoveis': 'zapimoveis.com.br',
+  'Viva Real': 'vivareal.com.br',
+  Imovelweb: 'imovelweb.com.br',
+  'Chaves na Mao': 'chavesnamao.com.br',
+  QuintoAndar: 'quintoandar.com.br',
+  Loft: 'loft.com.br',
+  Netimoveis: 'netimoveis.com',
+  'Lugar Certo': 'lugarcerto.com.br',
+  Wimoveis: 'wimoveis.com.br',
+  'Casa Mineira': 'casamineira.com.br',
+  Properati: 'properati.com.br'
+};
+const SITEMAP_SOURCES = {
+  'Chaves na Mao': [
+    'https://www.chavesnamao.com.br/sitemap-venda-imoveis-01.xml.gz',
+    'https://www.chavesnamao.com.br/sitemap-venda-imoveis-02.xml.gz',
+    'https://www.chavesnamao.com.br/sitemap-aluguel-imoveis-01.xml.gz'
+  ],
+  Netimoveis: [
+    'https://www.netimoveis.com/sitemaps/sitemap-imoveis_1.xml',
+    'https://www.netimoveis.com/sitemaps/sitemap-imoveis_2.xml',
+    'https://www.netimoveis.com/sitemaps/sitemap-imoveis_3.xml'
+  ]
+};
+const DEFAULT_SOURCES = Object.keys(SOURCE_SITES);
 const DEBUG = process.argv.includes('--debug') || process.env.DEBUG_PROPERTIES === '1';
 const userArg = process.argv.find((arg) => arg.startsWith('--user='));
 const USER_ID = userArg ? Number(userArg.split('=')[1]) : Number(process.env.IMOVEIS_USER_ID || 0);
+const zlib = require('zlib');
 
 function hashProperty(item) {
   return crypto.createHash('sha256').update(`${item.fonte}|${item.url}|${item.titulo}|${item.preco_texto}`).digest('hex');
 }
 
-function slug(value) {
-  return normalizeText(value || '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function compact(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 function toMoney(value) {
-  const digits = String(value || '').replace(/[^\d,]/g, '').replace(/\./g, '').replace(',', '.');
-  const number = Number(digits);
+  const match = String(value || '').match(/R\$\s?[\d.]+(?:,\d{2})?/i);
+  if (!match) return null;
+  const number = Number(match[0].replace(/[^\d,]/g, '').replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function firstNumber(text, patterns) {
   for (const pattern of patterns) {
     const match = String(text || '').match(pattern);
-    if (match) return Number(match[1]);
+    if (match) return Number(String(match[1]).replace(',', '.'));
   }
   return null;
 }
 
-function parseCard($, element, source, fallback = {}) {
-  const card = $(element);
-  const link = card.find('a[href]').first().attr('href') || card.attr('href') || '';
-  const text = card.text().replace(/\s+/g, ' ').trim();
-  const title = card.find('h2,h3,[class*="title"],[class*="Title"]').first().text().replace(/\s+/g, ' ').trim() || text.slice(0, 120);
-  const priceText = card.find('[class*="price"],[class*="Price"]').first().text().replace(/\s+/g, ' ').trim() || (text.match(/R\$\s?[\d.,]+/) || [''])[0];
+function decodeDuckUrl(href) {
+  if (!href) return '';
+  try {
+    const url = new URL(href, 'https://duckduckgo.com');
+    return url.searchParams.get('uddg') || url.href;
+  } catch {
+    return href;
+  }
+}
+
+function buildQuery(term, search, site) {
+  const parts = [
+    `site:${site}`,
+    search.tipo_negocio || 'venda',
+    term,
+    search.tipo_imovel,
+    search.cidade,
+    search.bairro,
+    search.preco_max ? `ate ${search.preco_max}` : ''
+  ].filter(Boolean);
+  return parts.join(' ');
+}
+
+function parseSearchResult($, element, source, search) {
+  const result = $(element);
+  const linkEl = result.find('a.result__a').first();
+  const title = compact(linkEl.text());
+  const url = decodeDuckUrl(linkEl.attr('href'));
+  const snippet = compact(result.find('.result__snippet').text());
+  const text = compact(`${title} ${snippet}`);
   return {
-    titulo: title,
-    anunciante: '',
-    tipo_negocio: fallback.tipo_negocio || 'venda',
-    tipo_imovel: fallback.tipo_imovel || '',
-    cidade: fallback.cidade || '',
-    bairro: fallback.bairro || '',
+    titulo: title || text.slice(0, 120),
+    anunciante: source,
+    tipo_negocio: search.tipo_negocio || 'venda',
+    tipo_imovel: search.tipo_imovel || inferType(text),
+    cidade: search.cidade || '',
+    bairro: search.bairro || '',
     endereco: '',
-    preco: toMoney(priceText),
-    preco_texto: priceText,
+    preco: toMoney(text),
+    preco_texto: (text.match(/R\$\s?[\d.]+(?:,\d{2})?/i) || [''])[0],
     condominio: null,
     iptu: null,
     quartos: firstNumber(text, [/(\d+)\s+quarto/i, /(\d+)\s+dorm/i]),
     banheiros: firstNumber(text, [/(\d+)\s+banheiro/i]),
     vagas_garagem: firstNumber(text, [/(\d+)\s+vaga/i]),
-    area_m2: firstNumber(text, [/(\d+(?:[,.]\d+)?)\s*m/i]),
+    area_m2: firstNumber(text, [/(\d+(?:[,.]\d+)?)\s*m[²2]/i]),
     fonte: source,
-    url: link.startsWith('http') ? link : '',
-    descricao: text,
+    url,
+    descricao: snippet || text,
     data_publicacao: '',
-    raw_json: { text }
+    raw_json: { title, snippet, url }
   };
 }
 
-async function fetchHtml(url) {
+function inferType(text) {
+  const normalized = normalizeText(text);
+  for (const type of ['apartamento', 'casa', 'terreno', 'sobrado', 'studio', 'kitnet', 'loja', 'sala comercial', 'chacara']) {
+    if (normalized.includes(normalizeText(type))) return type;
+  }
+  return '';
+}
+
+function titleFromUrl(url) {
+  try {
+    const path = new URL(url).pathname;
+    const slug = decodeURIComponent(path.split('/').filter(Boolean).find((part) => /venda|locacao|aluguel|quarto|casa|apartamento|terreno|imovel/i.test(part)) || path);
+    return compact(slug.replace(/[-_]+/g, ' ').replace(/\bid\b.*$/i, ''));
+  } catch {
+    return compact(String(url).replace(/[-_/]+/g, ' ')).slice(0, 140);
+  }
+}
+
+function parseUrlProperty(url, source, search) {
+  const decoded = decodeURIComponent(url);
+  const text = compact(titleFromUrl(decoded));
+  const normalized = normalizeText(`${decoded} ${text}`);
+  const operation = normalized.includes('aluguel') || normalized.includes('locacao') ? 'aluguel' : 'venda';
+  return {
+    titulo: text || `${source} - imovel`,
+    anunciante: source,
+    tipo_negocio: operation || search.tipo_negocio || 'venda',
+    tipo_imovel: search.tipo_imovel || inferType(decoded),
+    cidade: search.cidade || '',
+    bairro: search.bairro || '',
+    endereco: '',
+    preco: toMoney(decoded),
+    preco_texto: (decoded.match(/R\$\s?[\d.]+(?:,\d{2})?|RS\d+/i) || [''])[0].replace(/^RS/i, 'R$ '),
+    condominio: null,
+    iptu: null,
+    quartos: firstNumber(decoded, [/(\d+)-quarto/i, /(\d+)-dorm/i, /(\d+)\s+quarto/i]),
+    banheiros: firstNumber(decoded, [/(\d+)-banheiro/i]),
+    vagas_garagem: firstNumber(decoded, [/(\d+)-vaga/i, /com-garagem/i]),
+    area_m2: firstNumber(decoded, [/(\d+(?:[,.]\d+)?)m2/i]),
+    fonte: source,
+    url,
+    descricao: text,
+    data_publicacao: '',
+    raw_json: { url }
+  };
+}
+
+async function fetchXml(url) {
   const response = await axios.get(url, {
+    timeout: 30000,
+    responseType: 'arraybuffer',
+    headers: { 'User-Agent': 'Mozilla/5.0 Radar Imoveis/1.0' }
+  });
+  let body = Buffer.from(response.data);
+  if (url.endsWith('.gz')) {
+    body = zlib.gunzipSync(body);
+  }
+  return body.toString('utf8');
+}
+
+async function searchViaSitemap(source, term, search) {
+  const maps = SITEMAP_SOURCES[source] || [];
+  const wanted = [term, search.tipo_imovel, search.cidade, search.bairro]
+    .filter(Boolean)
+    .map((item) => normalizeText(item));
+  const operation = normalizeText(search.tipo_negocio || '');
+  const results = [];
+  for (const sitemapUrl of maps) {
+    const xml = await fetchXml(sitemapUrl);
+    const $ = cheerio.load(xml, { xmlMode: true });
+    const locs = $('loc').map((_, element) => $(element).text()).get();
+    for (const loc of locs) {
+      const normalized = normalizeText(decodeURIComponent(loc));
+      if (operation === 'venda' && normalized.includes('locacao')) continue;
+      if (operation === 'aluguel' && normalized.includes('venda')) continue;
+      if (wanted.length && !wanted.every((part) => normalized.includes(part))) continue;
+      results.push(parseUrlProperty(loc, source, search));
+      if (results.length >= 25) return results;
+    }
+  }
+  return results;
+}
+
+async function searchViaDuckDuckGo(source, term, search) {
+  const site = SOURCE_SITES[source];
+  if (!site) return [];
+  const query = buildQuery(term, search, site);
+  const response = await axios.get('https://html.duckduckgo.com/html/', {
     timeout: 20000,
+    params: { q: query },
     headers: {
-      'User-Agent': 'Mozilla/5.0 Radar Imoveis/1.0',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Radar Imoveis/1.0',
       'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
     }
   });
-  return response.data;
-}
-
-async function searchMercadoLivre(term, search) {
-  const query = slug([term, search.tipo_imovel, search.cidade, search.bairro].filter(Boolean).join(' '));
-  const url = `https://lista.mercadolivre.com.br/imoveis/${query}`;
-  const html = await fetchHtml(url);
-  const $ = cheerio.load(html);
-  const cards = $('.ui-search-result, li[class*="ui-search-layout__item"]').toArray().slice(0, 20);
-  return cards.map((card) => parseCard($, card, 'Mercado Livre', search)).filter((item) => item.url || item.titulo);
-}
-
-async function searchOlx(term, search) {
-  const query = encodeURIComponent([term, search.tipo_imovel, search.cidade, search.bairro].filter(Boolean).join(' '));
-  const url = `https://www.olx.com.br/imoveis?q=${query}`;
-  const html = await fetchHtml(url);
-  const $ = cheerio.load(html);
-  const cards = $('a[href*="/imovel"], section, li').toArray().slice(0, 30);
-  return cards.map((card) => parseCard($, card, 'OLX', search)).filter((item) => item.url && item.titulo);
-}
-
-async function searchZapFamily(term, search, source) {
-  const base = source === 'Zap Imoveis' ? 'https://www.zapimoveis.com.br' : 'https://www.vivareal.com.br';
-  const operation = search.tipo_negocio === 'aluguel' ? 'aluguel' : 'venda';
-  const city = slug(search.cidade || 'brasil');
-  const type = slug(search.tipo_imovel || term || 'imoveis');
-  const url = `${base}/${operation}/${type}/${city}/`;
-  const html = await fetchHtml(url);
-  const $ = cheerio.load(html);
-  const cards = $('[data-cy*="rp-card"], article, li').toArray().slice(0, 20);
-  return cards.map((card) => parseCard($, card, source, search)).filter((item) => item.titulo);
+  const $ = cheerio.load(response.data);
+  const rows = $('.result').toArray().slice(0, 12);
+  return rows
+    .map((row) => parseSearchResult($, row, source, search))
+    .filter((item) => item.url && item.titulo);
 }
 
 async function runSource(source, term, search) {
-  if (source === 'Mercado Livre') return searchMercadoLivre(term, search);
-  if (source === 'OLX') return searchOlx(term, search);
-  if (source === 'Zap Imoveis') return searchZapFamily(term, search, source);
-  if (source === 'Viva Real') return searchZapFamily(term, search, source);
-  return [];
+  if (SITEMAP_SOURCES[source]) {
+    return searchViaSitemap(source, term, search);
+  }
+  return searchViaDuckDuckGo(source, term, search);
 }
 
 function splitFilterTerms(value) {
@@ -142,6 +255,16 @@ function scoreProperty(item, search) {
   return { score: Math.max(0, Math.min(100, score)), summary: notes.length ? notes.join('; ') : 'anuncio salvo pelos filtros da busca' };
 }
 
+function selectedSources(value) {
+  let parsed = [];
+  try {
+    parsed = value ? JSON.parse(value) : [];
+  } catch {
+    parsed = [];
+  }
+  return [...new Set([...parsed, ...DEFAULT_SOURCES])].filter((source) => SOURCE_SITES[source]);
+}
+
 async function main() {
   if (!USER_ID) throw new Error('Informe o usuario com --user=ID.');
   const db = pool();
@@ -157,12 +280,15 @@ async function main() {
   const failures = [];
   for (const search of searches) {
     const terms = lines(search.termos || 'imovel');
-    const sources = search.fontes ? JSON.parse(search.fontes) : DEFAULT_SOURCES;
+    const sources = selectedSources(search.fontes);
     console.log(`Busca "${search.nome || search.id}": ${sources.join(', ')} | termos: ${terms.join(', ')}`);
     for (const term of terms) {
       for (const source of sources) {
         try {
           const items = await runSource(source, term, search);
+          if (!items.length) {
+            failures.push(`${source} nao retornou resultados para "${term}"`);
+          }
           let savedFromSource = 0;
           for (const item of items) {
             if (!matchesFilters(item, search)) { ignored += 1; continue; }
@@ -176,16 +302,21 @@ async function main() {
           }
           console.log(`${source}: ${items.length} brutos para "${term}". ${savedFromSource} novos salvos.`);
         } catch (error) {
-          const warning = `${source} falhou para "${term}": ${error.message}`;
+          const status = error.response?.status ? `HTTP ${error.response.status}` : error.code || error.message;
+          const warning = `${source} falhou para "${term}": ${status}`;
           failures.push(warning);
           if (DEBUG) console.error(warning);
         }
       }
     }
   }
-  const logMessage = `${inserted} imoveis novos salvos. ${ignored} ignorados pelos filtros.${failures.length ? ` Alertas: ${failures.length} fonte(s)/termo(s) falharam.` : ''}`;
-  await db.execute('INSERT INTO logs_execucao_imoveis (user_id, tipo, mensagem) VALUES (?, ?, ?)', [USER_ID, 'search-properties', logMessage]);
+  const uniqueFailures = [...new Set(failures)];
+  const logMessage = `${inserted} imoveis novos salvos. ${ignored} ignorados pelos filtros.${uniqueFailures.length ? ` Alertas: ${uniqueFailures.length} falha(s) de fonte.` : ''}`;
+  await db.execute('INSERT INTO logs_execucao_imoveis (user_id, tipo, mensagem) VALUES (?, ?, ?)', [USER_ID, 'search-properties', `${logMessage}\n${uniqueFailures.join('\n')}`.trim()]);
   console.log(logMessage);
+  if (uniqueFailures.length) {
+    console.log(`WARNINGS_JSON:${JSON.stringify(uniqueFailures)}`);
+  }
   await db.end();
 }
 

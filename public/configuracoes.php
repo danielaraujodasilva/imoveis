@@ -3,7 +3,7 @@ $pageTitle = 'Buscas';
 require_once __DIR__ . '/../includes/header.php';
 
 $userId = current_user_id();
-$fontes = ['Mercado Livre', 'OLX', 'Zap Imoveis', 'Viva Real'];
+$fontes = ['Mercado Livre', 'OLX', 'Zap Imoveis', 'Viva Real', 'Imovelweb', 'Chaves na Mao', 'QuintoAndar', 'Loft', 'Netimoveis', 'Lugar Certo', 'Wimoveis', 'Casa Mineira', 'Properati'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_valid_csrf();
@@ -50,7 +50,7 @@ if (!empty($_GET['editar'])) {
 $stmt = $pdo->prepare('SELECT * FROM buscas_imoveis WHERE user_id = ? ORDER BY id DESC');
 $stmt->execute([$userId]);
 $buscas = $stmt->fetchAll();
-$selectedSources = $editBusca && $editBusca['fontes'] ? json_decode($editBusca['fontes'], true) : $fontes;
+$selectedSources = $editBusca && $editBusca['fontes'] ? array_values(array_unique(array_merge(json_decode($editBusca['fontes'], true) ?: [], $fontes))) : $fontes;
 ?>
 <div class="row g-4">
     <div class="col-lg-5">
