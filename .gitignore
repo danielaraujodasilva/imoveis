@@ -1,0 +1,7 @@
+node/node_modules/
+node/.env
+config/local.php
+uploads/curriculos/*
+!uploads/curriculos/.htaccess
+logs/*.log
+!logs/.gitkeep

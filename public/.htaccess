@@ -1,0 +1,2 @@
+RedirectMatch 302 ^/paula/public/?$ /paula/
+RedirectMatch 302 ^/paula/public/(.*)$ /paula/$1
