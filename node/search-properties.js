@@ -47,7 +47,7 @@ function compact(value) {
 }
 
 function toMoney(value) {
-  const match = String(value || '').match(/R\$\s?[\d.]+(?:,\d{2})?/i);
+  const match = String(value || '').match(/(?:R\$\s?|RS)[\d.]+(?:,\d{2})?/i);
   if (!match) return null;
   const number = Number(match[0].replace(/[^\d,]/g, '').replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(number) && number > 0 ? number : null;
@@ -126,11 +126,47 @@ function inferType(text) {
 function titleFromUrl(url) {
   try {
     const path = new URL(url).pathname;
-    const slug = decodeURIComponent(path.split('/').filter(Boolean).find((part) => /venda|locacao|aluguel|quarto|casa|apartamento|terreno|imovel/i.test(part)) || path);
-    return compact(slug.replace(/[-_]+/g, ' ').replace(/\bid\b.*$/i, ''));
+    const parts = path.split('/').filter(Boolean).map((part) => decodeURIComponent(part));
+    const slug = parts.find((part) => part !== 'imovel' && /venda|locacao|aluguel|quarto|casa|apartamento|terreno|sobrado|sala|comercial/i.test(part)) || parts.at(-2) || path;
+    return compact(slug
+      .replace(/[-_]+/g, ' ')
+      .replace(/\bRS\s?\d+.*$/i, '')
+      .replace(/\bid\b.*$/i, ''));
   } catch {
     return compact(String(url).replace(/[-_/]+/g, ' ')).slice(0, 140);
   }
+}
+
+function saneArea(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  if (number > 2000 && number % 1000 === 0) return number / 1000;
+  return number > 5000 ? null : number;
+}
+
+function titleCase(value) {
+  return compact(value)
+    .split(' ')
+    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : '')
+    .join(' ');
+}
+
+function locationFromUrl(url) {
+  try {
+    const path = decodeURIComponent(new URL(url).pathname);
+    const normalizedPath = path.replace(/[-_]+/g, ' ').replace(/\bRS\s?\d+.*$/i, '').replace(/\d+(?:[,.]\d+)?m2.*$/i, '');
+    const ufMatch = normalizedPath.match(/\b(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)\b\s+(.+)$/i);
+    if (ufMatch) {
+      return `${ufMatch[1].toUpperCase()} - ${titleCase(ufMatch[2])}`;
+    }
+    const netimoveisMatch = path.match(/\/imovel\/[^/]+-(acre|alagoas|amapa|amazonas|bahia|ceara|distrito-federal|espirito-santo|goias|maranhao|mato-grosso|mato-grosso-do-sul|minas-gerais|para|paraiba|parana|pernambuco|piaui|rio-de-janeiro|rio-grande-do-norte|rio-grande-do-sul|rondonia|roraima|santa-catarina|sao-paulo|sergipe|tocantins)-([^/]+)\/\d+/i);
+    if (netimoveisMatch) {
+      return titleCase(`${netimoveisMatch[1]} ${netimoveisMatch[2]}`.replace(/-/g, ' '));
+    }
+  } catch {
+    return '';
+  }
+  return '';
 }
 
 function parseUrlProperty(url, source, search) {
@@ -143,7 +179,7 @@ function parseUrlProperty(url, source, search) {
     anunciante: source,
     tipo_negocio: operation || search.tipo_negocio || 'venda',
     tipo_imovel: search.tipo_imovel || inferType(decoded),
-    cidade: search.cidade || '',
+    cidade: search.cidade || locationFromUrl(url),
     bairro: search.bairro || '',
     endereco: '',
     preco: toMoney(decoded),
@@ -153,7 +189,7 @@ function parseUrlProperty(url, source, search) {
     quartos: firstNumber(decoded, [/(\d+)-quarto/i, /(\d+)-dorm/i, /(\d+)\s+quarto/i]),
     banheiros: firstNumber(decoded, [/(\d+)-banheiro/i]),
     vagas_garagem: firstNumber(decoded, [/(\d+)-vaga/i, /com-garagem/i]),
-    area_m2: firstNumber(decoded, [/(\d+(?:[,.]\d+)?)m2/i]),
+    area_m2: saneArea(firstNumber(decoded, [/(\d+(?:[,.]\d+)?)m2/i])),
     fonte: source,
     url,
     descricao: text,

@@ -5,6 +5,34 @@ function showToast(message) {
     bootstrap.Toast.getOrCreateInstance(el).show();
 }
 
+function renderSourceWarning() {
+    const raw = sessionStorage.getItem('imoveisSourceWarnings');
+    if (!raw) return;
+    sessionStorage.removeItem('imoveisSourceWarnings');
+    let warnings = [];
+    try {
+        warnings = JSON.parse(raw);
+    } catch {
+        warnings = [];
+    }
+    if (!Array.isArray(warnings) || !warnings.length) return;
+    const main = document.querySelector('.app-main');
+    const topbar = document.querySelector('.topbar');
+    if (!main || !topbar) return;
+    const count = warnings.length;
+    const preview = warnings.slice(0, 4).map(escapeHtml).join('<br>');
+    const extra = count > 4 ? `<br><span class="text-muted">+${count - 4} outros alertas registrados no log.</span>` : '';
+    topbar.insertAdjacentHTML('afterend', `
+        <div class="alert alert-warning source-warning-alert" role="alert" data-source-warning>
+            <div>
+                <strong>${count} fonte(s) nao responderam ou vieram sem resultado.</strong>
+                <div class="small mt-1">${preview}${extra}</div>
+            </div>
+            <button type="button" class="btn-close" aria-label="Fechar" data-source-warning-close></button>
+        </div>
+    `);
+}
+
 const searchProgressSteps = [
     { at: 6, text: 'Preparando as buscas salvas e conectando ao banco...' },
     { at: 14, text: 'Lendo termos, cidade, bairro e filtros de preco...' },
@@ -124,9 +152,7 @@ function money(value, fallback) {
 
 function propertyRow(item) {
     const id = Number(item.id || 0);
-    const score = Math.max(0, Math.min(100, Number(item.nota_oportunidade || 0)));
     return `<tr>
-        <td><span class="score-pill" title="${score}% oportunidade">${score}%</span></td>
         <td>${escapeHtml(item.titulo)}</td>
         <td>${money(item.preco, item.preco_texto)}</td>
         <td>${escapeHtml([item.bairro, item.cidade].filter(Boolean).join(' - '))}</td>
@@ -180,7 +206,7 @@ function initPropertiesTable() {
             hasMore = Boolean(data.has_more);
             if (loadedEl) loadedEl.textContent = String(offset);
             if (totalEl) totalEl.textContent = String(data.total);
-            if (!offset) tbody.innerHTML = '<tr><td colspan="10" class="text-muted">Nenhum imovel encontrado.</td></tr>';
+            if (!offset) tbody.innerHTML = '<tr><td colspan="9" class="text-muted">Nenhum imovel encontrado.</td></tr>';
             endEl?.classList.toggle('d-none', hasMore || !offset);
             loadMoreBtn?.classList.toggle('d-none', !hasMore);
         } catch (error) {
@@ -203,6 +229,12 @@ function initPropertiesTable() {
 }
 
 document.addEventListener('click', async (event) => {
+    const closeWarning = event.target.closest('[data-source-warning-close]');
+    if (closeWarning) {
+        closeWarning.closest('[data-source-warning]')?.remove();
+        return;
+    }
+
     const statusButton = event.target.closest('[data-status-id]');
     if (!statusButton) return;
     statusButton.disabled = true;
@@ -228,10 +260,10 @@ document.getElementById('runSearchBtn')?.addEventListener('click', async (event)
     try {
         const data = await postJson(appUrl('api/rodar_busca.php'), {});
         progress.finish('Busca concluida. Atualizando resultados...');
-        showToast(data.message || 'Rastreamento finalizado.');
         if (Array.isArray(data.warnings) && data.warnings.length) {
-            setTimeout(() => showToast(`${data.warnings.length} alerta(s) de fonte. A busca continuou com as demais.`), 900);
+            sessionStorage.setItem('imoveisSourceWarnings', JSON.stringify(data.warnings));
         }
+        showToast(data.message || 'Rastreamento finalizado.');
         setTimeout(() => window.location.reload(), 1200);
     } catch (error) {
         progress.fail(error.message);
@@ -243,3 +275,4 @@ document.getElementById('runSearchBtn')?.addEventListener('click', async (event)
 });
 
 initPropertiesTable();
+renderSourceWarning();

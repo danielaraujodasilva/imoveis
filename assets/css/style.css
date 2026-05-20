@@ -531,6 +531,22 @@ textarea {
     background: linear-gradient(90deg, #ef4444, #fca5a5);
 }
 
+.source-warning-alert {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin: -10px 0 20px;
+    border-color: rgba(245, 158, 11, .38);
+    background: rgba(120, 77, 15, .18);
+    color: #fde68a;
+}
+
+.source-warning-alert .btn-close {
+    filter: invert(1) grayscale(1);
+    opacity: .72;
+}
+
 @media (min-width: 920px) {
     .app-shell {
         display: flex;

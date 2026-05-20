@@ -13,10 +13,10 @@ if (!empty($_GET['q'])) {
     $term = '%' . $_GET['q'] . '%';
     array_push($params, $term, $term, $term, $term, $term);
 }
-foreach (['preco_min' => 'preco >= ?', 'preco_max' => 'preco <= ?', 'quartos_min' => 'quartos >= ?', 'area_min' => 'area_m2 >= ?', 'nota_min' => 'nota_oportunidade >= ?'] as $key => $sql) {
+foreach (['preco_min' => 'preco >= ?', 'preco_max' => 'preco <= ?', 'quartos_min' => 'quartos >= ?', 'area_min' => 'area_m2 >= ?'] as $key => $sql) {
     if (isset($_GET[$key]) && $_GET[$key] !== '') { $where[] = $sql; $params[] = (float)$_GET[$key]; }
 }
-$orderMap = ['nota' => 'nota_oportunidade', 'recentes' => 'id', 'preco' => 'preco', 'cidade' => 'cidade', 'bairro' => 'bairro', 'quartos' => 'quartos', 'area' => 'area_m2', 'fonte' => 'fonte', 'status' => 'status'];
+$orderMap = ['recentes' => 'id', 'titulo' => 'titulo', 'preco' => 'preco', 'cidade' => 'cidade', 'bairro' => 'bairro', 'tipo' => 'tipo_imovel', 'quartos' => 'quartos', 'area' => 'area_m2', 'fonte' => 'fonte', 'status' => 'status'];
 $sortKey = $_GET['ordem'] ?? 'recentes';
 $sortDir = strtolower((string)($_GET['dir'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
 $orderColumn = $orderMap[$sortKey] ?? 'id';
@@ -76,7 +76,7 @@ $opcoes = [
     <div class="col-md-2"><label class="form-label">Preco max</label><input name="preco_max" type="number" class="form-control" value="<?= e($_GET['preco_max'] ?? '') ?>"></div>
     <div class="col-md-2"><label class="form-label">Quartos min</label><input name="quartos_min" type="number" class="form-control" value="<?= e($_GET['quartos_min'] ?? '') ?>"></div>
     <div class="col-md-2"><label class="form-label">Area min</label><input name="area_min" type="number" class="form-control" value="<?= e($_GET['area_min'] ?? '') ?>"></div>
-    <div class="col-md-2"><label class="form-label">Ordenar</label><select name="ordem" class="form-select"><?php foreach (['recentes' => 'Mais recentes', 'nota' => 'Oportunidade', 'preco' => 'Preco', 'cidade' => 'Cidade', 'bairro' => 'Bairro', 'quartos' => 'Quartos', 'area' => 'Area', 'fonte' => 'Fonte', 'status' => 'Status'] as $k => $v): ?><option value="<?= $k ?>" <?= ($_GET['ordem'] ?? 'recentes') === $k ? 'selected' : '' ?>><?= $v ?></option><?php endforeach; ?></select></div>
+    <div class="col-md-2"><label class="form-label">Ordenar</label><select name="ordem" class="form-select"><?php foreach (['recentes' => 'Mais recentes', 'titulo' => 'Titulo', 'preco' => 'Preco', 'cidade' => 'Cidade', 'bairro' => 'Bairro', 'tipo' => 'Tipo', 'quartos' => 'Quartos', 'area' => 'Area', 'fonte' => 'Fonte', 'status' => 'Status'] as $k => $v): ?><option value="<?= $k ?>" <?= ($_GET['ordem'] ?? 'recentes') === $k ? 'selected' : '' ?>><?= $v ?></option><?php endforeach; ?></select></div>
     <div class="col-md-2"><label class="form-label">Direcao</label><select name="dir" class="form-select"><option value="desc" <?= ($_GET['dir'] ?? 'desc') === 'desc' ? 'selected' : '' ?>>Decrescente</option><option value="asc" <?= ($_GET['dir'] ?? '') === 'asc' ? 'selected' : '' ?>>Crescente</option></select></div>
     <div class="col-md-2"><button class="btn btn-accent w-100" type="submit"><i class="bi bi-filter"></i> Filtrar</button></div>
     <div class="col-md-2"><a class="btn btn-outline-light w-100" href="imoveis.php"><i class="bi bi-x-circle"></i> Limpar</a></div>
@@ -87,9 +87,9 @@ $opcoes = [
     <span class="text-muted small"><span data-properties-loaded>0</span> de <span data-properties-total><?= $totalImoveis ?></span> imoveis exibidos.</span>
 </div>
 <div class="table-responsive"><table class="table align-middle" data-properties-table data-query="<?= e(http_build_query($_GET)) ?>">
-<thead><tr><th><?= sort_link('nota', 'Nota') ?></th><th>Titulo</th><th><?= sort_link('preco', 'Preco') ?></th><th>Local</th><th>Tipo</th><th><?= sort_link('quartos', 'Quartos') ?></th><th><?= sort_link('area', 'Area') ?></th><th><?= sort_link('fonte', 'Fonte') ?></th><th><?= sort_link('status', 'Status') ?></th><th>Acoes</th></tr></thead>
+<thead><tr><th><?= sort_link('titulo', 'Titulo') ?></th><th><?= sort_link('preco', 'Preco') ?></th><th><?= sort_link('cidade', 'Local') ?></th><th><?= sort_link('tipo', 'Tipo') ?></th><th><?= sort_link('quartos', 'Quartos') ?></th><th><?= sort_link('area', 'Area') ?></th><th><?= sort_link('fonte', 'Fonte') ?></th><th><?= sort_link('status', 'Status') ?></th><th>Acoes</th></tr></thead>
 <tbody data-properties-body>
-<tr data-properties-empty><td colspan="10" class="text-muted">Carregando imoveis...</td></tr>
+<tr data-properties-empty><td colspan="9" class="text-muted">Carregando imoveis...</td></tr>
 </tbody></table></div>
 <div class="d-grid mt-3">
     <button class="btn btn-outline-light d-none" type="button" data-load-more-properties>Carregar mais imoveis</button>

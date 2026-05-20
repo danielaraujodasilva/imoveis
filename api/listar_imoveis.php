@@ -22,14 +22,14 @@ if (isset($_GET['preco_min']) && $_GET['preco_min'] !== '') { $where[] = 'preco 
 if (isset($_GET['preco_max']) && $_GET['preco_max'] !== '') { $where[] = 'preco <= ?'; $params[] = (float)$_GET['preco_max']; }
 if (isset($_GET['quartos_min']) && $_GET['quartos_min'] !== '') { $where[] = 'quartos >= ?'; $params[] = (int)$_GET['quartos_min']; }
 if (isset($_GET['area_min']) && $_GET['area_min'] !== '') { $where[] = 'area_m2 >= ?'; $params[] = (float)$_GET['area_min']; }
-if (isset($_GET['nota_min']) && $_GET['nota_min'] !== '') { $where[] = 'nota_oportunidade >= ?'; $params[] = (int)$_GET['nota_min']; }
 
 $orderMap = [
-    'nota' => 'nota_oportunidade',
     'recentes' => 'id',
+    'titulo' => 'titulo',
     'preco' => 'preco',
     'cidade' => 'cidade',
     'bairro' => 'bairro',
+    'tipo' => 'tipo_imovel',
     'quartos' => 'quartos',
     'area' => 'area_m2',
     'fonte' => 'fonte',
