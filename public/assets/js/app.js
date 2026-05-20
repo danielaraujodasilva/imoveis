@@ -5,6 +5,85 @@ function showToast(message) {
     bootstrap.Toast.getOrCreateInstance(el).show();
 }
 
+const searchProgressSteps = [
+    { at: 6, text: 'Preparando as buscas salvas e conectando ao banco...' },
+    { at: 14, text: 'Lendo termos, cidade, bairro e filtros de preco...' },
+    { at: 24, text: 'Consultando fontes abertas e sitemaps imobiliarios...' },
+    { at: 38, text: 'Filtrando anuncios por tipo, localizacao e palavras-chave...' },
+    { at: 52, text: 'Comparando precos, quartos e metragem com suas preferencias...' },
+    { at: 68, text: 'Salvando oportunidades novas e ignorando duplicadas...' },
+    { at: 82, text: 'Registrando alertas de fontes que nao responderam...' },
+    { at: 93, text: 'Finalizando a lista para atualizar a tela...' }
+];
+
+function ensureSearchProgress() {
+    let el = document.querySelector('[data-search-progress]');
+    if (el) return el;
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="search-progress d-none" data-search-progress role="status" aria-live="polite">
+            <div class="search-progress-head">
+                <strong>Rastreando imoveis</strong>
+                <span data-search-progress-percent>0%</span>
+            </div>
+            <div class="search-progress-bar" aria-hidden="true">
+                <span data-search-progress-bar></span>
+            </div>
+            <p data-search-progress-text>Preparando busca...</p>
+        </div>
+    `);
+    return document.querySelector('[data-search-progress]');
+}
+
+function startSearchProgress() {
+    const el = ensureSearchProgress();
+    const bar = el.querySelector('[data-search-progress-bar]');
+    const percentEl = el.querySelector('[data-search-progress-percent]');
+    const textEl = el.querySelector('[data-search-progress-text]');
+    let percent = 3;
+    let stepIndex = 0;
+
+    function render(value, text) {
+        const next = Math.max(0, Math.min(100, Math.round(value)));
+        percent = next;
+        bar.style.width = `${next}%`;
+        percentEl.textContent = `${next}%`;
+        if (text) textEl.textContent = text;
+    }
+
+    el.classList.remove('d-none');
+    render(percent, searchProgressSteps[0].text);
+
+    const timer = setInterval(() => {
+        const targetStep = searchProgressSteps[stepIndex + 1];
+        if (targetStep && percent >= targetStep.at) {
+            stepIndex += 1;
+            render(percent, searchProgressSteps[stepIndex].text);
+            return;
+        }
+        const ceiling = searchProgressSteps[Math.min(stepIndex + 1, searchProgressSteps.length - 1)].at;
+        const increment = percent < 30 ? 3 : percent < 70 ? 2 : 1;
+        render(Math.min(percent + increment, Math.max(ceiling - 1, 95)));
+    }, 850);
+
+    return {
+        finish(message = 'Busca concluida. Atualizando resultados...') {
+            clearInterval(timer);
+            render(100, message);
+            setTimeout(() => el.classList.add('d-none'), 1000);
+        },
+        fail(message = 'Nao foi possivel concluir a busca agora.') {
+            clearInterval(timer);
+            el.classList.add('is-error');
+            render(Math.max(percent, 100), message);
+            setTimeout(() => {
+                el.classList.add('d-none');
+                el.classList.remove('is-error');
+                render(0, 'Preparando busca...');
+            }, 2400);
+        }
+    };
+}
+
 async function postJson(url, payload) {
     const response = await fetch(url, {
         method: 'POST',
@@ -143,16 +222,19 @@ document.addEventListener('click', async (event) => {
 document.getElementById('runSearchBtn')?.addEventListener('click', async (event) => {
     const button = event.currentTarget;
     const original = button.innerHTML;
+    const progress = startSearchProgress();
     button.disabled = true;
     button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Rastreando...';
     try {
         const data = await postJson(appUrl('api/rodar_busca.php'), {});
+        progress.finish('Busca concluida. Atualizando resultados...');
         showToast(data.message || 'Rastreamento finalizado.');
         if (Array.isArray(data.warnings) && data.warnings.length) {
             setTimeout(() => showToast(`${data.warnings.length} alerta(s) de fonte. A busca continuou com as demais.`), 900);
         }
-        setTimeout(() => window.location.reload(), 900);
+        setTimeout(() => window.location.reload(), 1200);
     } catch (error) {
+        progress.fail(error.message);
         showToast(error.message);
     } finally {
         button.disabled = false;

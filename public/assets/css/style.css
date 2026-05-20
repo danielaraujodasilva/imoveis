@@ -267,6 +267,68 @@ a { color: #7dd3fc; }
     padding: 0 18px 18px;
 }
 
+.search-progress {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    width: min(420px, calc(100vw - 32px));
+    z-index: 1080;
+    border: 1px solid rgba(32, 201, 151, .32);
+    border-radius: 8px;
+    background: rgba(15, 17, 21, .96);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .36);
+    padding: 16px;
+    backdrop-filter: blur(12px);
+}
+
+.search-progress-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.search-progress-head span {
+    color: var(--accent);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.search-progress-bar {
+    height: 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .08);
+}
+
+.search-progress-bar span {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent), #6ee7b7);
+    transition: width .45s ease;
+}
+
+.search-progress p {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: .9rem;
+}
+
+.search-progress.is-error {
+    border-color: rgba(248, 113, 113, .42);
+}
+
+.search-progress.is-error .search-progress-head span {
+    color: #fca5a5;
+}
+
+.search-progress.is-error .search-progress-bar span {
+    background: linear-gradient(90deg, #ef4444, #fca5a5);
+}
+
 @media (max-width: 900px) {
     .app-shell { display: block; }
     .sidebar {
@@ -285,4 +347,10 @@ a { color: #7dd3fc; }
     .monetization-block { align-items: stretch; flex-direction: column; }
     .public-footer { max-width: calc(100vw - 24px); overflow-x: auto; }
     .setting-row { grid-template-columns: 1fr; gap: 10px; }
+    .search-progress {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        width: auto;
+    }
 }
