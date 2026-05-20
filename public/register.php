@@ -35,9 +35,9 @@ require_once __DIR__ . '/../includes/header.php';
 ?>
 <div class="auth-card">
     <div class="mb-4">
-        <span class="brand-mark">P</span>
+        <span class="brand-mark">R</span>
         <h1 class="h4 mt-3 mb-1">Criar conta</h1>
-        <p class="text-muted mb-0">Cada pessoa tera suas proprias buscas, buscas e status de imoveis.</p>
+        <p class="text-muted mb-0">Cada pessoa tera suas proprias buscas e status de imoveis.</p>
     </div>
     <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
     <form method="post">

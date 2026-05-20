@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS agente_vagas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE agente_vagas;
+CREATE DATABASE IF NOT EXISTS agente_imoveis CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE agente_imoveis;
 
 CREATE TABLE IF NOT EXISTS usuarios (
   id INT AUTO_INCREMENT PRIMARY KEY,

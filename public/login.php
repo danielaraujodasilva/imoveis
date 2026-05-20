@@ -26,9 +26,9 @@ require_once __DIR__ . '/../includes/header.php';
 ?>
 <div class="auth-card">
     <div class="mb-4">
-        <span class="brand-mark">P</span>
+        <span class="brand-mark">R</span>
         <h1 class="h4 mt-3 mb-1">Entrar no Radar Imoveis</h1>
-        <p class="text-muted mb-0">Suas buscas, buscas e imoveis ficam separados por login.</p>
+        <p class="text-muted mb-0">Suas buscas e imoveis ficam separados por login.</p>
     </div>
     <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
     <?php if (isset($_GET['criado'])): ?><div class="alert alert-success">Conta criada. Pode entrar.</div><?php endif; ?>

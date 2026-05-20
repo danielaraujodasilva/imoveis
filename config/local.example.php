@@ -1,6 +1,6 @@
 <?php
 defined('DB_HOST') || define('DB_HOST', '127.0.0.1');
-defined('DB_NAME') || define('DB_NAME', 'agente_vagas');
+defined('DB_NAME') || define('DB_NAME', 'agente_imoveis');
 defined('DB_USER') || define('DB_USER', 'root');
 defined('DB_PASS') || define('DB_PASS', '');
 

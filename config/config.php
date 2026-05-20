@@ -7,7 +7,7 @@ if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
 }
 
 define('DB_HOST', '127.0.0.1');
-define('DB_NAME', 'agente_vagas');
+define('DB_NAME', 'agente_imoveis');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 
